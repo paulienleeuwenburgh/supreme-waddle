@@ -304,6 +304,41 @@ document.addEventListener("DOMContentLoaded", () => {
     return details.schedule;
   }
 
+  // Build a shareable URL for a specific activity
+  function buildActivityShareUrl(activityName) {
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set("activity", activityName);
+    return currentUrl.toString();
+  }
+
+  // Build share details for an activity
+  function getActivityShareData(activityName, details) {
+    const shareText = `${activityName} at Mergington High School: ${details.description}`;
+    return {
+      title: `Check out ${activityName}`,
+      text: shareText,
+      url: buildActivityShareUrl(activityName),
+    };
+  }
+
+  // Copy text to the clipboard with fallback support
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textArea);
+  }
+
   // Function to determine activity type (this would ideally come from backend)
   function getActivityType(activityName, description) {
     const name = activityName.toLowerCase();
@@ -498,6 +533,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Format the schedule using the new helper function
     const formattedSchedule = formatSchedule(details);
+    const shareData = getActivityShareData(name, details);
+    const encodedShareText = encodeURIComponent(shareData.text);
+    const encodedShareUrl = encodeURIComponent(shareData.url);
+    const whatsappShareUrl = `https://wa.me/?text=${encodedShareText}%20${encodedShareUrl}`;
+    const xShareUrl = `https://twitter.com/intent/tweet?text=${encodedShareText}&url=${encodedShareUrl}`;
 
     // Create activity tag
     const tagHtml = `
@@ -528,6 +568,20 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="tooltip-text">Regular meetings at this time throughout the semester</span>
       </p>
       ${capacityIndicator}
+      <div class="social-share-actions">
+        <button class="share-button native-share-button">
+          Share
+        </button>
+        <button class="share-button copy-share-button">
+          Copy Link
+        </button>
+        <a class="share-button share-link-button" href="${whatsappShareUrl}" target="_blank" rel="noopener noreferrer">
+          WhatsApp
+        </a>
+        <a class="share-button share-link-button" href="${xShareUrl}" target="_blank" rel="noopener noreferrer">
+          X
+        </a>
+      </div>
       <div class="participants-list">
         <h5>Current Participants:</h5>
         <ul>
@@ -575,6 +629,43 @@ document.addEventListener("DOMContentLoaded", () => {
     const deleteButtons = activityCard.querySelectorAll(".delete-participant");
     deleteButtons.forEach((button) => {
       button.addEventListener("click", handleUnregister);
+    });
+
+    // Add click handler for native share button
+    const nativeShareButton = activityCard.querySelector(".native-share-button");
+    nativeShareButton.addEventListener("click", async () => {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: shareData.title,
+            text: shareData.text,
+            url: shareData.url,
+          });
+          return;
+        } catch (error) {
+          if (error.name === "AbortError") {
+            return;
+          }
+        }
+      }
+
+      try {
+        await copyTextToClipboard(shareData.url);
+        showMessage("Share link copied to clipboard!", "success");
+      } catch (error) {
+        showMessage("Could not copy share link. Please copy it manually.", "error");
+      }
+    });
+
+    // Add click handler for copy link button
+    const copyShareButton = activityCard.querySelector(".copy-share-button");
+    copyShareButton.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(shareData.url);
+        showMessage("Share link copied to clipboard!", "success");
+      } catch (error) {
+        showMessage("Could not copy share link. Please copy it manually.", "error");
+      }
     });
 
     // Add click handler for register button (only when authenticated)
